@@ -1,6 +1,6 @@
 # ROYAL’S AI BusinessOS
 
-An original, responsive business workspace for Indian MSMEs. The initial foundation includes multi-tenant PostgreSQL data, password-based sessions, configurable roles, business onboarding, customer and supplier directories, product records, GST-aware invoice issue, payment capture, audit events, operational summaries, and provider interfaces.
+An original, responsive business workspace for Indian MSMEs. The app includes business-scoped records, password-based sessions, business onboarding, customer and supplier directories, product records, GST-aware invoice issue, payment and expense capture, CRM follow-ups, audit events, operational summaries, and provider interfaces. Local development uses SQLite; the checked-in Prisma schema does not yet target PostgreSQL.
 
 ## Local setup
 
@@ -19,10 +19,11 @@ The first account that creates a business receives the owner role. Records are a
 
 - Email/password signup and sign-in with bcrypt password hashes and HTTP-only signed session cookies.
 - Business setup and owner membership, plus role/permission foundation.
-- Business-scoped customers, suppliers, products, opening stock movements, invoices, invoice items, payment receipts, and audit logs.
+- Business-scoped customers, suppliers, products and opening stock movements, invoices, invoice items, payment receipts, expenses, leads, follow-up tasks, and audit logs.
 - GST line and invoice totals calculated deterministically in integer paise. Intrastate invoices split GST between CGST/SGST; interstate invoices use IGST based on configured state codes.
 - ROYAL AI screen provides read-only answers calculated directly from persisted business records. It does not pretend a model is connected.
-- Responsive navigation and operational dashboard.
+- Responsive navigation and an operational dashboard with daily sales graphed from saved invoices.
+- Automation rules can be saved for review; a background worker does not execute them yet.
 
 ## Integration configuration
 
@@ -30,4 +31,4 @@ GST/PAN verification, payment links, WhatsApp, and external AI require an author
 
 ## Scope and production readiness
 
-This repository is a functioning foundation, not the entire product scope in the master brief. Accounting ledgers and statutory reports, purchases, expense entry, stock decrement/transfer, full document templates/PDF, email verification/reset, OTP/Google/2FA, rate limiting, file storage, queue workers, integrations, subscriptions, super-admin functions, export, and full demo seed data remain follow-on modules. Do not treat the operational report snapshot as a statutory statement or tax filing. Use HTTPS, rotate secrets, configure backups, and complete security review before production deployment.
+This repository is a functioning foundation, not the entire product scope in the master brief. Accounting ledgers and statutory reports, purchases, automatic stock decrement/transfer, full document templates/PDF, email verification/reset, OTP/Google/2FA, rate limiting, file storage, automation workers, live integrations, subscriptions, super-admin functions, export, and full demo seed data remain follow-on modules. Do not treat the operational report snapshot as a statutory statement or tax filing. Use HTTPS, rotate secrets, configure backups, and complete security review before production deployment.
