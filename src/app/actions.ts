@@ -6,6 +6,8 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { createSession, getBusinessContext, requireBusiness } from "@/lib/auth";
 import { calculateInvoice } from "@/lib/gst";
+import { getGSTProvider } from "@/lib/verification/provider";
+import { getPaymentProvider } from "@/lib/payments/provider";
 
 const emailSchema = z.email();
 export async function signIn(formData: FormData) {
@@ -47,14 +49,32 @@ export async function setupBusiness(formData: FormData) {
   await db.auditLog.create({ data: { businessId: business.id, userId: user.id, action: "BUSINESS_CREATED", entityType: "Business", entityId: business.id } });
   redirect("/dashboard");
 }
-const customerSchema = z.object({ name:z.string().min(1).max(120), company:z.string().max(120).optional(), email:z.union([z.email(),z.literal("")]).optional(), phone:z.string().max(20).optional(), gstin:z.string().max(15).optional(), state:z.string().max(80).optional(), stateCode:z.string().max(2).optional() });
+const customerSchema = z.object({ name:z.string().min(1).max(120), company:z.string().max(120).optional(), email:z.union([z.email(),z.literal("")]).optional(), phone:z.string().max(20).optional(), gstin:z.string().max(15).optional(), pan:z.string().max(10).optional(), state:z.string().max(80).optional(), stateCode:z.string().max(2).optional() });
 export async function addCustomer(formData: FormData) {
   const ctx=await requireBusiness(); const parsed=customerSchema.safeParse(Object.fromEntries(formData));
   if(!parsed.success) redirect("/customers/new?error=validation");
   const code=`CUS-${Date.now().toString().slice(-7)}`;
-  await db.customer.create({data:{...parsed.data,email:parsed.data.email||null,businessId:ctx.business.id,code}});
+  await db.customer.create({data:{...parsed.data,email:parsed.data.email||null,gstin:parsed.data.gstin?.toUpperCase()||null,pan:parsed.data.pan?.toUpperCase()||null,businessId:ctx.business.id,code}});
   await db.auditLog.create({data:{businessId:ctx.business.id,userId:ctx.user.id,action:"CUSTOMER_CREATED",entityType:"Customer",entityId:code}});
   revalidatePath("/customers");redirect("/customers");
+}
+export async function verifyGSTIN(formData: FormData) {
+  const ctx = await requireBusiness();
+  const gstin = String(formData.get("gstin") ?? "").trim().toUpperCase();
+  if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstin)) redirect("/customers/new?error=gstin-format");
+  const provider = getGSTProvider();
+  if (!provider) redirect("/customers/new?error=gstin-provider");
+  try {
+    const result = await provider.verifyGSTIN(gstin);
+    const hash = await (await import("node:crypto")).createHash("sha256").update(gstin).digest("hex");
+    await db.verificationRequest.create({ data: { businessId: ctx.business.id, kind: "GSTIN", identifierHash: hash, status: "VERIFIED", provider: "configured-gst-api", result: JSON.stringify({ legalName: result.legalName, tradeName: result.tradeName, status: result.status, stateCode: result.stateCode }) } });
+    await db.auditLog.create({ data: { businessId: ctx.business.id, userId: ctx.user.id, action: "GSTIN_VERIFIED", entityType: "VerificationRequest", metadata: JSON.stringify({ identifierHash: hash }) } });
+    redirect(`/customers/new?gstin=${encodeURIComponent(gstin)}&verified=1`);
+  } catch (error) {
+    if (error && typeof error === "object" && "digest" in error && String((error as {digest?:unknown}).digest).startsWith("NEXT_REDIRECT")) throw error;
+    console.error("GSTIN provider verification failed", error);
+    redirect("/customers/new?error=gstin-failed");
+  }
 }
 const productSchema = z.object({sku:z.string().min(1).max(40),name:z.string().min(1).max(120),category:z.string().max(80).optional(),unit:z.string().max(20),gstRate:z.coerce.number().min(0).max(100),purchasePrice:z.coerce.number().min(0),sellingPrice:z.coerce.number().min(0),openingStock:z.coerce.number().min(0),minimumStock:z.coerce.number().min(0),hsnSac:z.string().max(20).optional()});
 export async function addProduct(formData:FormData){
@@ -90,6 +110,28 @@ export async function recordPayment(formData: FormData) {
   revalidatePath("/finance");
   revalidatePath("/invoices");
   redirect("/finance");
+}
+export async function createInvoicePaymentLink(formData: FormData) {
+  const ctx = await requireBusiness();
+  const id = String(formData.get("invoiceId") ?? "");
+  const invoice = await db.invoice.findFirst({ where: { id, businessId: ctx.business.id }, include: { customer: true } });
+  if (!invoice || !invoice.customer || invoice.status === "PAID") redirect("/invoices?error=payment-link");
+  const provider = getPaymentProvider();
+  if (!provider) redirect("/invoices?error=payment-provider");
+  const balancePaise = Math.round((Number(invoice.total) - Number(invoice.amountPaid)) * 100);
+  if (balancePaise <= 0) redirect("/invoices?error=payment-link");
+  const appUrl = (process.env.APP_BASE_URL || process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
+  try {
+    const link = await provider.createPaymentLink({ amountPaise: balancePaise, reference: invoice.number, customerName: invoice.customer.name, customerPhone: invoice.customer.phone || undefined, callbackUrl: `${appUrl}/payment-return` });
+    await db.payment.create({ data: { businessId: ctx.business.id, invoiceId: invoice.id, amount: balancePaise / 100, method: "PAYMENT_LINK", reference: link.id, notes: link.url } });
+    await db.auditLog.create({ data: { businessId: ctx.business.id, userId: ctx.user.id, action: "PAYMENT_LINK_CREATED", entityType: "Invoice", entityId: invoice.id, metadata: JSON.stringify({ providerId: link.id }) } });
+    revalidatePath("/invoices");
+    redirect("/invoices?payment-link=created");
+  } catch (error) {
+    if (error && typeof error === "object" && "digest" in error && String((error as {digest?:unknown}).digest).startsWith("NEXT_REDIRECT")) throw error;
+    console.error("Payment link creation failed", error);
+    redirect("/invoices?error=payment-provider-failed");
+  }
 }
 export async function signOut(){const {cookies}=await import("next/headers");(await cookies()).delete("royal_session");const {isAuth0Configured}=await import("@/lib/auth0");redirect(isAuth0Configured?"/auth/logout?returnTo=%2Flogin":"/login");}
 
