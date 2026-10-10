@@ -8,6 +8,7 @@ import { createSession, getBusinessContext, requireBusiness } from "@/lib/auth";
 import { calculateInvoice } from "@/lib/gst";
 import { getGSTProvider } from "@/lib/verification/provider";
 import { getPaymentProvider } from "@/lib/payments/provider";
+import { processAutomationEvent, runScheduledAutomations } from "@/lib/automations";
 
 const emailSchema = z.email();
 export async function signIn(formData: FormData) {
@@ -90,7 +91,7 @@ export async function addInvoice(formData:FormData){
  const interstate=!!(ctx.business.stateCode&&customer?.stateCode&&ctx.business.stateCode!==customer.stateCode);
  const calc=calculateInvoice([{quantity:v.quantity,rate:v.rate,gstRate:v.gstRate,discountPercent:v.discountPercent}],interstate);
  const number=`INV-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
- await db.invoice.create({data:{businessId:ctx.business.id,customerId:customer?.id,number,status:"ISSUED",sellerStateCode:ctx.business.stateCode,buyerStateCode:customer?.stateCode,subtotal:calc.subtotal,taxTotal:calc.taxTotal,total:calc.total,items:{create:{description:v.description,quantity:v.quantity,rate:v.rate,gstRate:v.gstRate,discountPercent:v.discountPercent,taxableValue:calc.lines[0].taxableValue,cgst:calc.lines[0].cgst,sgst:calc.lines[0].sgst,igst:calc.lines[0].igst,total:calc.total}}}});
+ await db.invoice.create({data:{businessId:ctx.business.id,customerId:customer?.id,number,status:"ISSUED",dueDate:new Date(Date.now()+30*24*60*60*1000),sellerStateCode:ctx.business.stateCode,buyerStateCode:customer?.stateCode,subtotal:calc.subtotal,taxTotal:calc.taxTotal,total:calc.total,items:{create:{description:v.description,quantity:v.quantity,rate:v.rate,gstRate:v.gstRate,discountPercent:v.discountPercent,taxableValue:calc.lines[0].taxableValue,cgst:calc.lines[0].cgst,sgst:calc.lines[0].sgst,igst:calc.lines[0].igst,total:calc.total}}}});
  await db.auditLog.create({data:{businessId:ctx.business.id,userId:ctx.user.id,action:"INVOICE_ISSUED",entityType:"Invoice",entityId:number}});revalidatePath("/invoices");revalidatePath("/dashboard");redirect("/invoices");
 }
 export async function recordPayment(formData: FormData) {
@@ -101,12 +102,14 @@ export async function recordPayment(formData: FormData) {
   if (!Number.isFinite(amount) || amount <= 0 || !method.success) redirect("/finance?error=validation");
   const invoice = await db.invoice.findFirst({ where: { id, businessId: ctx.business.id } });
   if (!invoice || amount > Number(invoice.total) - Number(invoice.amountPaid)) redirect("/finance?error=amount");
-  await db.$transaction(async (tx) => {
-    await tx.payment.create({ data: { businessId: ctx.business.id, invoiceId: id, amount, method: method.data } });
+  const payment = await db.$transaction(async (tx) => {
+    const payment = await tx.payment.create({ data: { businessId: ctx.business.id, invoiceId: id, amount, method: method.data } });
     const paid = Number(invoice.amountPaid) + amount;
     await tx.invoice.update({ where: { id }, data: { amountPaid: paid, status: paid >= Number(invoice.total) ? "PAID" : "PARTIALLY_PAID" } });
     await tx.auditLog.create({ data: { businessId: ctx.business.id, userId: ctx.user.id, action: "PAYMENT_RECORDED", entityType: "Invoice", entityId: id, metadata: JSON.stringify({ amount, method: method.data }) } });
+    return payment;
   });
+  await processAutomationEvent({ businessId: ctx.business.id, trigger: "PAYMENT_RECEIVED", entityType: "Payment", entityId: payment.id, title: `Payment received for ${invoice.number}`, details: `Recorded ${amount.toLocaleString("en-IN", { style: "currency", currency: "INR" })} by ${method.data}.`, amount });
   revalidatePath("/finance");
   revalidatePath("/invoices");
   redirect("/finance");
@@ -149,7 +152,8 @@ export async function addLead(formData: FormData) {
   const ctx = await requireBusiness();
   const name = z.string().min(2).max(120).safeParse(String(formData.get("name") ?? "").trim());
   if (!name.success) redirect("/crm?error=lead");
-  await db.lead.create({ data: { businessId: ctx.business.id, name: name.data, company: String(formData.get("company") ?? "") || null, phone: String(formData.get("phone") ?? "") || null, email: String(formData.get("email") ?? "") || null, stage: String(formData.get("stage") ?? "NEW"), estimatedValue: Number(formData.get("estimatedValue") ?? 0) || null, followUpAt: formData.get("followUpAt") ? new Date(String(formData.get("followUpAt"))) : null } });
+  const lead = await db.lead.create({ data: { businessId: ctx.business.id, name: name.data, company: String(formData.get("company") ?? "") || null, phone: String(formData.get("phone") ?? "") || null, email: String(formData.get("email") ?? "") || null, stage: String(formData.get("stage") ?? "NEW"), estimatedValue: Number(formData.get("estimatedValue") ?? 0) || null, followUpAt: formData.get("followUpAt") ? new Date(String(formData.get("followUpAt"))) : null } });
+  await processAutomationEvent({ businessId: ctx.business.id, trigger: "LEAD_CREATED", entityType: "Lead", entityId: lead.id, leadId: lead.id, title: `New lead: ${lead.name}`, details: `${lead.company ? `${lead.company}. ` : ""}Review the lead and decide on the next contact.`, amount: lead.estimatedValue ?? undefined });
   revalidatePath("/crm"); redirect("/crm");
 }
 
@@ -167,6 +171,27 @@ export async function addAutomationRule(formData: FormData) {
   const ctx = await requireBusiness();
   const name = z.string().min(2).max(120).safeParse(String(formData.get("name") ?? "").trim());
   if (!name.success) redirect("/automations?error=rule");
-  await db.automationRule.create({ data: { businessId: ctx.business.id, name: name.data, trigger: String(formData.get("trigger") ?? "INVOICE_OVERDUE"), condition: String(formData.get("condition") ?? "") || null, action: String(formData.get("action") ?? "CREATE_TASK") } });
+  const trigger=z.enum(["INVOICE_OVERDUE","PAYMENT_RECEIVED","STOCK_LOW","LEAD_CREATED"]).safeParse(String(formData.get("trigger")??"INVOICE_OVERDUE"));
+  const action=z.enum(["CREATE_TASK","PREPARE_REMINDER","NOTIFY_MANAGER"]).safeParse(String(formData.get("action")??"CREATE_TASK"));
+  const minAmount=String(formData.get("minAmount")??"").trim();
+  if(!trigger.success||!action.success||(minAmount&&(!Number.isFinite(Number(minAmount))||Number(minAmount)<0)))redirect("/automations?error=rule");
+  await db.automationRule.create({ data: { businessId: ctx.business.id, name: name.data, trigger: trigger.data, condition: minAmount?`MIN_AMOUNT=${Number(minAmount)}`:null, action: action.data } });
+  revalidatePath("/automations"); redirect("/automations");
+}
+
+export async function runAutomationsNow() {
+  const ctx = await requireBusiness();
+  const count = await runScheduledAutomations(ctx.business.id);
+  await db.auditLog.create({ data: { businessId: ctx.business.id, userId: ctx.user.id, action: "AUTOMATIONS_SCANNED", entityType: "AutomationRule", metadata: JSON.stringify({ tasksCreated: count }) } });
+  revalidatePath("/automations"); revalidatePath("/crm");
+  redirect(`/automations?ran=${count}`);
+}
+
+export async function toggleAutomationRule(formData: FormData) {
+  const ctx = await requireBusiness();
+  const ruleId = String(formData.get("ruleId") ?? "");
+  const rule = await db.automationRule.findFirst({ where: { id: ruleId, businessId: ctx.business.id } });
+  if (!rule) redirect("/automations?error=rule");
+  await db.automationRule.update({ where: { id: rule.id }, data: { isActive: !rule.isActive } });
   revalidatePath("/automations"); redirect("/automations");
 }

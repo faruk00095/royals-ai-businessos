@@ -50,6 +50,7 @@ model Business {
   verificationRequests VerificationRequest[]
   tasks Task[]
   automationRules AutomationRule[]
+  automationRuns AutomationRun[]
 }
 
 model Membership {
@@ -294,7 +295,24 @@ model AutomationRule {
   isActive Boolean @default(true)
   createdAt DateTime @default(now())
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  runs AutomationRun[]
   @@index([businessId, isActive])
+}
+
+model AutomationRun {
+  id String @id @default(cuid())
+  businessId String
+  ruleId String
+  trigger String
+  entityType String
+  entityId String
+  action String
+  result String
+  createdAt DateTime @default(now())
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  rule AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  @@unique([ruleId, entityType, entityId])
+  @@index([businessId, createdAt])
 }
 
 model AuditLog {

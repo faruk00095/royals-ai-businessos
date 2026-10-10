@@ -23,7 +23,7 @@ The first account that creates a business receives the owner role. Records are a
 - GST line and invoice totals calculated deterministically in integer paise. Intrastate invoices split GST between CGST/SGST; interstate invoices use IGST based on configured state codes.
 - ROYAL AI screen provides read-only answers calculated directly from persisted business records. It does not pretend a model is connected.
 - Responsive navigation and an operational dashboard with daily sales graphed from saved invoices.
-- Automation rules can be saved for review; a background worker does not execute them yet.
+- Automation rules run idempotently: lead and payment events trigger immediately, while overdue invoices and low-stock products are scanned from the Automations page. Each rule creates reviewable tasks/reminder drafts; external messages are never sent automatically.
 
 ## Integration configuration
 

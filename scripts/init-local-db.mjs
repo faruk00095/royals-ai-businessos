@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS Expense (id TEXT PRIMARY KEY, businessId TEXT NOT NUL
 CREATE TABLE IF NOT EXISTS Lead (id TEXT PRIMARY KEY, businessId TEXT NOT NULL, name TEXT NOT NULL, company TEXT, email TEXT, phone TEXT, stage TEXT NOT NULL DEFAULT 'NEW', source TEXT, estimatedValue REAL, followUpAt DATETIME, notes TEXT, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(businessId) REFERENCES Business(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS Task (id TEXT PRIMARY KEY, businessId TEXT NOT NULL, leadId TEXT, title TEXT NOT NULL, dueAt DATETIME, status TEXT NOT NULL DEFAULT 'OPEN', priority TEXT NOT NULL DEFAULT 'MEDIUM', notes TEXT, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(businessId) REFERENCES Business(id) ON DELETE CASCADE, FOREIGN KEY(leadId) REFERENCES Lead(id) ON DELETE SET NULL);
 CREATE TABLE IF NOT EXISTS AutomationRule (id TEXT PRIMARY KEY, businessId TEXT NOT NULL, name TEXT NOT NULL, trigger TEXT NOT NULL, condition TEXT, action TEXT NOT NULL, isActive BOOLEAN NOT NULL DEFAULT 1, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(businessId) REFERENCES Business(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS AutomationRun (id TEXT PRIMARY KEY, businessId TEXT NOT NULL, ruleId TEXT NOT NULL, trigger TEXT NOT NULL, entityType TEXT NOT NULL, entityId TEXT NOT NULL, action TEXT NOT NULL, result TEXT NOT NULL, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(businessId) REFERENCES Business(id) ON DELETE CASCADE, FOREIGN KEY(ruleId) REFERENCES AutomationRule(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS AuditLog (id TEXT PRIMARY KEY, businessId TEXT NOT NULL, userId TEXT, action TEXT NOT NULL, entityType TEXT NOT NULL, entityId TEXT, metadata TEXT, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(businessId) REFERENCES Business(id) ON DELETE CASCADE, FOREIGN KEY(userId) REFERENCES User(id) ON DELETE SET NULL);
 CREATE TABLE IF NOT EXISTS VerificationRequest (id TEXT PRIMARY KEY, businessId TEXT NOT NULL, kind TEXT NOT NULL, identifierHash TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'PENDING', provider TEXT, result TEXT, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(businessId) REFERENCES Business(id) ON DELETE CASCADE);
 CREATE INDEX IF NOT EXISTS Customer_business_name_idx ON Customer(businessId,name);
@@ -27,6 +28,8 @@ CREATE INDEX IF NOT EXISTS Invoice_business_date_idx ON Invoice(businessId,date)
 CREATE INDEX IF NOT EXISTS Payment_business_paidAt_idx ON Payment(businessId,paidAt);
 CREATE INDEX IF NOT EXISTS Task_business_status_dueAt_idx ON Task(businessId,status,dueAt);
 CREATE INDEX IF NOT EXISTS AutomationRule_business_active_idx ON AutomationRule(businessId,isActive);
+CREATE UNIQUE INDEX IF NOT EXISTS AutomationRun_rule_entity_key ON AutomationRun(ruleId,entityType,entityId);
+CREATE INDEX IF NOT EXISTS AutomationRun_business_created_idx ON AutomationRun(businessId,createdAt);
 `);
 try { db.exec("ALTER TABLE Invoice ADD COLUMN kind TEXT NOT NULL DEFAULT 'GST_INVOICE'"); } catch (error) { if (!String(error).includes("duplicate column")) throw error; }
 db.close();
