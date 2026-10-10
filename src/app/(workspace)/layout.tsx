@@ -1,0 +1,2 @@
+import {redirect} from "next/navigation";import {getBusinessContext} from "@/lib/auth";import {Shell} from "@/components/shell";
+export default async function WorkspaceLayout({children}:{children:React.ReactNode}){const c=await getBusinessContext();if(!c)redirect("/login");if(!c.membership)redirect("/onboarding");return <>{/* Children supply page-specific shell context via workspace shell below. */}{children}</>}

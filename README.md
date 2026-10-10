@@ -1,0 +1,33 @@
+# ROYAL’S AI BusinessOS
+
+An original, responsive business workspace for Indian MSMEs. The initial foundation includes multi-tenant PostgreSQL data, password-based sessions, configurable roles, business onboarding, customer and supplier directories, product records, GST-aware invoice issue, payment capture, audit events, operational summaries, and provider interfaces.
+
+## Local setup
+
+Requirements: Node.js 22.5+. The repository runs locally with SQLite. The included database setup script uses Node's built-in `node:sqlite` module. Production deployments need a separately reviewed PostgreSQL Prisma schema and migration setup; the checked-in schema currently targets SQLite.
+
+1. For a fresh clone, copy `.env.example` to `.env.local` and set a random `AUTH_SECRET` (at least 32 characters). The sample config uses the local SQLite database.
+2. Install dependencies: `npm install`.
+3. Generate Prisma client: `npm run db:generate`.
+4. Create the local development database: `npm run db:init`.
+5. Start the app: `npm run dev` and open `http://localhost:3000`.
+6. Create an account and follow business onboarding.
+
+The first account that creates a business receives the owner role. Records are always queried with the signed-in user's business membership. `DEMO_MODE` is not a bypass: the app does not ship shared demo credentials or fake verification results.
+
+## Current functionality
+
+- Email/password signup and sign-in with bcrypt password hashes and HTTP-only signed session cookies.
+- Business setup and owner membership, plus role/permission foundation.
+- Business-scoped customers, suppliers, products, opening stock movements, invoices, invoice items, payment receipts, and audit logs.
+- GST line and invoice totals calculated deterministically in integer paise. Intrastate invoices split GST between CGST/SGST; interstate invoices use IGST based on configured state codes.
+- ROYAL AI screen provides read-only answers calculated directly from persisted business records. It does not pretend a model is connected.
+- Responsive navigation and operational dashboard.
+
+## Integration configuration
+
+GST/PAN verification, payment links, WhatsApp, and external AI require an authorized provider and server-side credentials. Adapter interfaces currently fail closed when unconfigured. Do not put provider secrets in browser code. Implement provider API calls and data-protection review before enabling any connector. GSTIN onboarding validates shape only and never claims government verification.
+
+## Scope and production readiness
+
+This repository is a functioning foundation, not the entire product scope in the master brief. Accounting ledgers and statutory reports, purchases, expense entry, stock decrement/transfer, full document templates/PDF, email verification/reset, OTP/Google/2FA, rate limiting, file storage, queue workers, integrations, subscriptions, super-admin functions, export, and full demo seed data remain follow-on modules. Do not treat the operational report snapshot as a statutory statement or tax filing. Use HTTPS, rotate secrets, configure backups, and complete security review before production deployment.

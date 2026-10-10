@@ -1,0 +1,42 @@
+{
+  "name": "royals-ai-businessos",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
+    "start": "next start",
+    "postinstall": "prisma generate",
+    "lint": "prisma generate && next typegen && tsc --noEmit",
+    "test": "vitest run",
+    "db:generate": "prisma generate",
+    "db:init": "node scripts/init-local-db.mjs",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.0",
+    "bcryptjs": "^3.0.2",
+    "jose": "^6.1.0",
+    "lucide-react": "^0.468.0",
+    "next": "^16.3.8",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^24.10.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "prisma": "^6.19.0",
+    "tailwindcss": "^4.1.17",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.8"
+  },
+  "overrides": {
+    "deepmerge-ts": "^8.0.2"
+  }
+}
