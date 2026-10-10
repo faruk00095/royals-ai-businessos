@@ -29,9 +29,8 @@ The first account that creates a business receives the owner role. Records are a
 
 GST/PAN verification, payment links, WhatsApp, and external AI require an authorized provider and server-side credentials. Adapter interfaces currently fail closed when unconfigured. Do not put provider secrets in browser code. Implement provider API calls and data-protection review before enabling any connector. GSTIN onboarding validates shape only and never claims government verification.
 
-### Auth0 sign-in (optional)
-
-Create an Auth0 **Regular Web Application**, then set `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET`, and a random `AUTH0_SECRET` in `.env.local`. Set `APP_BASE_URL` to the app's base URL. In the Auth0 application, add `<APP_BASE_URL>/auth/callback` under Allowed Callback URLs, `<APP_BASE_URL>` under Allowed Logout URLs, and `<APP_BASE_URL>` under Allowed Web Origins. For local development, the base URL is `http://localhost:3000`. Auth0 users must have a verified email; verified emails map to the matching BusinessOS account or create a new one. Password sign-in remains available. Auth0 settings are optional, so without them the sign-in option is replaced by a setup note and the existing login continues to work.
+## SIGIN STEP
+you can use this email arfarooq5@gmail.com and password 123 or you can create yourself registrted
 
 ## Scope and production readiness
 
