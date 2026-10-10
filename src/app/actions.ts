@@ -91,7 +91,7 @@ export async function recordPayment(formData: FormData) {
   revalidatePath("/invoices");
   redirect("/finance");
 }
-export async function signOut(){const {cookies}=await import("next/headers");(await cookies()).delete("royal_session");redirect("/login");}
+export async function signOut(){const {cookies}=await import("next/headers");(await cookies()).delete("royal_session");const {isAuth0Configured}=await import("@/lib/auth0");redirect(isAuth0Configured?"/auth/logout?returnTo=%2Flogin":"/login");}
 
 export async function addExpense(formData: FormData) {
   const ctx = await requireBusiness();

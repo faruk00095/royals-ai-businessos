@@ -6,9 +6,14 @@ if (process.env.NODE_ENV === "production" && (!configuredSecret || configuredSec
   throw new Error("AUTH_SECRET must be set to a random value of at least 32 characters in production.");
 }
 const secret = new TextEncoder().encode(configuredSecret || "development-only-secret-change-me-32chars");
+export async function createSessionToken(userId: string) {
+  return new SignJWT({ sub: userId }).setProtectedHeader({ alg: "HS256" }).setIssuedAt().setExpirationTime("7d").sign(secret);
+}
+export function sessionCookieOptions() {
+  return { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax" as const, path: "/", maxAge: 60 * 60 * 24 * 7 };
+}
 export async function createSession(userId: string) {
-  const token = await new SignJWT({ sub: userId }).setProtectedHeader({ alg: "HS256" }).setIssuedAt().setExpirationTime("7d").sign(secret);
-  (await cookies()).set("royal_session", token, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 7 });
+  (await cookies()).set("royal_session", await createSessionToken(userId), sessionCookieOptions());
 }
 export async function getUser() {
   const token = (await cookies()).get("royal_session")?.value;
