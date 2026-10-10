@@ -36,3 +36,7 @@ Create an Auth0 **Regular Web Application**, then set `AUTH0_DOMAIN`, `AUTH0_CLI
 ## Scope and production readiness
 
 This repository is a functioning foundation, not the entire product scope in the master brief. Accounting ledgers and statutory reports, purchases, automatic stock decrement/transfer, full document templates/PDF, email verification/reset, OTP/Google/2FA, rate limiting, file storage, automation workers, live integrations, subscriptions, super-admin functions, export, and full demo seed data remain follow-on modules. Do not treat the operational report snapshot as a statutory statement or tax filing. Use HTTPS, rotate secrets, configure backups, and complete security review before production deployment.
+
+#LOGIN 
+details email arfarooq5@gmail password 123 or else you can create a diffrent account
+
